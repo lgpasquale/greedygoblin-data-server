@@ -2,7 +2,7 @@
 
 ## Project
 
-`wow-data-server` collects auction house data for **WoW: Forever** from the official
+`greedygoblin-data-server` collects auction house data for **WoW: Forever** from the official
 Blizzard Battle.net API and keeps it as **time series**. Blizzard serves only the
 current auction state, not past states. The history that this project builds is
 the data we keep.
@@ -25,7 +25,8 @@ for the database. Keep CPU and RAM use of our own services low.
 - Timestamps are `timestamptz` in the database, UTC everywhere.
 - Never write secrets (Blizzard client id and secret) into the repo. Read them from
   environment variables (`BLIZZARD_CLIENT_ID`, `BLIZZARD_CLIENT_SECRET`,
-  `DATABASE_URL`), set in `.env` (not committed; see `.env.example`).
+  `DATABASE_URL`). Locally they are set in `.env` (not committed; see
+  `.env.example`); on the VM they come from GitHub secrets (see Deployment).
 - All configuration comes from environment variables. No config file.
 - The main branch is `master`.
 - Build only what is asked. Do not add features, storage or data that were not
@@ -34,7 +35,7 @@ for the database. Keep CPU and RAM use of our own services low.
 ## Stack
 
 - **Language: Rust** (stable). It is a Cargo workspace:
-  - `crates/core` (package `wow-core`; not `core`, which would shadow the
+  - `crates/core` (package `greedygoblin-core`; not `core`, which would shadow the
     standard library crate): shared types (`Region`), migrations (`MIGRATOR`),
     connection setup.
   - `crates/collector`: a long-running service with its own schedule (see below).
@@ -57,11 +58,11 @@ for the database. Keep CPU and RAM use of our own services low.
   Regions listed in `REGIONS` (comma-separated, default all four). One region's scan
   failing must not affect the others. On start, it does not catch up on missed
   scans; it waits for the next slot.
-- **Docker**: one image, `wow-data-server`, built by `Dockerfile` from this
+- **Docker**: one image, `greedygoblin-data-server`, built by `Dockerfile` from this
   workspace with every binary (`collector`, later `api`) on `debian:trixie-slim`.
   The build uses `SQLX_OFFLINE=true`. `docker-compose.yml` runs `db` and
   `collector` (`api` once it exists); the services use
-  `wow-data-server:${IMAGE_TAG:-latest}`. Their `DATABASE_URL` is built from
+  `greedygoblin-data-server:${IMAGE_TAG:-latest}`. Their `DATABASE_URL` is built from
   `POSTGRES_*`, so the password must not contain URL special characters.
 - **Deployment**: GitHub Actions on push to `master`. The runner builds the image,
   tags it with the commit SHA, and copies it to the VM over SSH without a
@@ -69,9 +70,14 @@ for the database. Keep CPU and RAM use of our own services low.
   Then it copies `docker-compose.yml` to the VM, runs `IMAGE_TAG=<sha> docker
   compose up -d` there and removes older images. The services use the local
   image (`pull_policy: never`). Workflow: `.github/workflows/deploy.yml`; it
-  needs the secrets `SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS` and the variables
-  `SSH_TARGET`, `DEPLOY_PATH`. The `.env` on the VM is created by hand. The TimescaleDB image is pulled from Docker Hub as
-  usual. A reverse proxy (Caddy or nginx) provides TLS in front of the API. The
+  needs the secrets `SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS`,
+  `BLIZZARD_CLIENT_ID`, `BLIZZARD_CLIENT_SECRET` and `POSTGRES_PASSWORD`. Host,
+  port, user and directory are in the workflow's `env`. There is **no `.env` on
+  the VM**: the workflow sends the secrets to `docker compose up` through SSH
+  stdin as environment variables. Compose commands run by hand on the VM need
+  them set too (they are required variables in `docker-compose.yml`); plain
+  `docker logs` / `docker exec` do not. The TimescaleDB image is pulled from
+  Docker Hub as usual. A reverse proxy (Caddy or nginx) provides TLS in front of the API. The
   database port is bound to `127.0.0.1` only.
 
 Reasons: the collector and the API share the same types and queries. A Rust
@@ -294,7 +300,7 @@ cargo fmt --check
 cargo run -p collector -- scan eu    # one scan of one region, then exit
 cargo run -p collector               # run the schedule
 cargo sqlx prepare --workspace       # refresh .sqlx/ after changing a query
-docker build -t wow-data-server .    # build the image locally
+docker build -t greedygoblin-data-server .    # build the image locally
 docker compose run --rm collector collector scan eu   # one scan in the container
 ```
 

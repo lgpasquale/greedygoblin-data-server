@@ -4,12 +4,12 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, anyhow, bail};
 use chrono::{DateTime, Utc};
+use greedygoblin_core::Region;
 use reqwest::header::{HeaderMap, IF_MODIFIED_SINCE, LAST_MODIFIED};
 use reqwest::{StatusCode, Url};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use tokio::sync::Mutex;
-use wow_core::Region;
 
 use crate::stats::Listing;
 
@@ -75,7 +75,10 @@ impl Client {
         let http = reqwest::Client::builder()
             .timeout(REQUEST_TIMEOUT)
             .gzip(true)
-            .user_agent(concat!("wow-data-server/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!(
+                "greedygoblin-data-server/",
+                env!("CARGO_PKG_VERSION")
+            ))
             .build()?;
         Ok(Self {
             http,

@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use anyhow::{Context, bail};
 use chrono::Utc;
+use greedygoblin_core::Region;
 use sqlx::PgPool;
 use tokio::signal::unix::{SignalKind, signal};
 use tracing_subscriber::EnvFilter;
-use wow_core::Region;
 
 use crate::blizzard::Client;
 
@@ -41,7 +41,7 @@ async fn main() -> anyhow::Result<()> {
         required_env("BLIZZARD_CLIENT_ID")?,
         required_env("BLIZZARD_CLIENT_SECRET")?,
     )?;
-    let pool = wow_core::connect(&database_url, DB_CONNECTIONS)
+    let pool = greedygoblin_core::connect(&database_url, DB_CONNECTIONS)
         .await
         .context("cannot connect to the database")?;
 

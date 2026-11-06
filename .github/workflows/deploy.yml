@@ -1,14 +1,17 @@
 # Builds the image on the runner and deploys it to the VM over SSH, without a
 # registry: docker save | zstd | ssh vm 'zstd -d | docker load'.
 #
-# Repository settings:
-#   secrets.SSH_PRIVATE_KEY  private key of the deploy user on the VM
-#   secrets.SSH_KNOWN_HOSTS  the VM's host key line(s) (ssh-keyscan <host>)
-#   vars.SSH_TARGET          user@host
-#   vars.DEPLOY_PATH         directory on the VM with docker-compose.yml and .env
+# Repository secrets:
+#   SSH_PRIVATE_KEY         private key of DEPLOY_USER on the VM
+#   SSH_KNOWN_HOSTS         the VM's host keys: ssh-keyscan -p <port> <host>
+#   BLIZZARD_CLIENT_ID      Blizzard API client
+#   BLIZZARD_CLIENT_SECRET
+#   POSTGRES_PASSWORD       database password (used only when the database is
+#                           first created; avoid characters like @ / : ? # %)
 #
-# The VM needs Docker with the compose plugin and zstd. The deploy user must be
-# allowed to run docker. .env on the VM is created by hand (see .env.example).
+# The secrets are sent to `docker compose up` through SSH stdin as environment
+# variables; no .env file is written on the VM. The VM needs Docker with the
+# compose plugin and zstd, and DEPLOY_USER must be allowed to run docker.
 
 name: deploy
 
@@ -22,10 +25,13 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  IMAGE: wow-data-server
+  IMAGE: greedygoblin-data-server
   TAG: ${{ github.sha }}
-  SSH_TARGET: ${{ vars.SSH_TARGET }}
-  DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+  DEPLOY_USER: luca
+  DEPLOY_HOST: pestering-curiosity.com
+  DEPLOY_PORT: 2008
+  DEPLOY_DIR: /home/luca/ci/greedygoblin-data-server
+  DEPLOY_VOLUMES_DIR: /docker
 
 jobs:
   deploy:
@@ -51,18 +57,28 @@ jobs:
         run: |
           docker save "$IMAGE:$TAG" "$IMAGE:latest" \
             | zstd -T0 -3 \
-            | ssh "$SSH_TARGET" 'zstd -d | docker load'
+            | ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" 'zstd -d | docker load'
 
       - name: Copy compose file to the VM
-        run: scp docker-compose.yml "$SSH_TARGET:$DEPLOY_PATH/docker-compose.yml"
+        run: |
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_DIR'"
+          scp -P "$DEPLOY_PORT" docker-compose.yml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/docker-compose.yml"
 
       - name: Start services
         run: |
-          ssh "$SSH_TARGET" "cd '$DEPLOY_PATH' && IMAGE_TAG='$TAG' docker compose up -d --remove-orphans"
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" " \
+            cd '$DEPLOY_DIR' && \
+            echo -e \"
+            DEPLOY_VOLUMES_DIR=${DEPLOY_VOLUMES_DIR}
+            BLIZZARD_CLIENT_ID=${{ secrets.BLIZZARD_CLIENT_ID }}
+            BLIZZARD_CLIENT_SECRET=${{ secrets.BLIZZARD_CLIENT_SECRET }}
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            \" > .env && \
+            IMAGE_TAG='$TAG' docker compose up -d --remove-orphans"
 
       - name: Remove old images
         # Keep the deployed image and "latest"; disk on the VM is limited.
         run: |
-          ssh "$SSH_TARGET" "docker images '$IMAGE' --format '{{.Tag}}' \
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "docker images '$IMAGE' --format '{{.Tag}}' \
             | grep -vxE 'latest|$TAG' \
             | xargs -r -I{} docker rmi '$IMAGE:{}'; docker image prune -f"

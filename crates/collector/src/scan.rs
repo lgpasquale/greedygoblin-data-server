@@ -4,8 +4,8 @@
 use anyhow::Context;
 use chrono::{DateTime, SubsecRound, Utc};
 use futures_util::{StreamExt, stream};
+use greedygoblin_core::Region;
 use sqlx::PgPool;
-use wow_core::Region;
 
 use crate::blizzard::{AuctionKind, Client, Fetched};
 use crate::stats::{self, ItemStats, Listing};
