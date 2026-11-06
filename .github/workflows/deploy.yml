@@ -45,13 +45,16 @@ jobs:
       - name: Set up SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
-        run: |
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_deploy
-          chmod 600 ~/.ssh/id_deploy
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          printf 'Host *\n  IdentityFile ~/.ssh/id_deploy\n  BatchMode yes\n' > ~/.ssh/config
+      # Configure SSH
+      - run: |
+          export HOME=/root
+          command -v ssh-agent >/dev/null || ( apt-get update -y && apt-get install openssh-client -y )
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${SSH_PRIVATE_KEY}" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p ${DEPLOY_PORT} ${DEPLOY_HOST} >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
       - name: Copy image to the VM
         run: |
