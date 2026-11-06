@@ -72,12 +72,12 @@ for the database. Keep CPU and RAM use of our own services low.
   image (`pull_policy: never`). Workflow: `.github/workflows/deploy.yml`; it
   needs the secrets `SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS`,
   `BLIZZARD_CLIENT_ID`, `BLIZZARD_CLIENT_SECRET` and `POSTGRES_PASSWORD`. Host,
-  port, user and directory are in the workflow's `env`. There is **no `.env` on
-  the VM**: the workflow sends the secrets to `docker compose up` through SSH
-  stdin as environment variables. Compose commands run by hand on the VM need
-  them set too (they are required variables in `docker-compose.yml`); plain
-  `docker logs` / `docker exec` do not. The TimescaleDB image is pulled from
-  Docker Hub as usual. A reverse proxy (Caddy or nginx) provides TLS in front of the API. The
+  port, user, directory and `DEPLOY_VOLUMES_DIR` (database data) are in the
+  workflow's `env`. At each deploy the workflow writes `.env` in the deploy
+  directory on the VM from these secrets, so compose can also be run by hand
+  there. The values are put in the SSH command line: keep them free of
+  `$`, `"`, `\` and backticks. The TimescaleDB image is pulled from Docker Hub
+  as usual. A reverse proxy (Caddy or nginx) provides TLS in front of the API. The
   database port is bound to `127.0.0.1` only.
 
 Reasons: the collector and the API share the same types and queries. A Rust
