@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT ah.id, ah.blizzard_id,\n               (SELECT sah.last_modified\n                  FROM scan_auction_house sah\n                 WHERE sah.auction_house_id = ah.id AND sah.last_modified IS NOT NULL\n                 ORDER BY sah.scan_id DESC\n                 LIMIT 1) AS previous_last_modified\n          FROM auction_house ah\n         WHERE ah.region = $1\n         ORDER BY ah.blizzard_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "auction_house",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "blizzard_id",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "auction_house",
+            "name": "blizzard_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "previous_last_modified",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "933f9975f0742eaf99bf363717d00b9855a70e80855e8cb1320356d20f2b41bf"
+}

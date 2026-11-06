@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT t.id AS \"id!\"\n          FROM UNNEST($1::integer[]) AS t(id)\n         WHERE NOT EXISTS (\n                 SELECT 1 FROM item i\n                  WHERE i.id = t.id\n                    AND (i.name IS NOT NULL OR i.updated_at > now() - interval '7 days'))\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4Array"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "412c4ed24ce8169b1c6264ea5d6da4e3b261f42b5cbc110eb608398e82bb9957"
+}

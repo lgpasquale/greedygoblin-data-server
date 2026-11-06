@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO item (id, name, quality, item_class, updated_at)\n            VALUES ($1, $2, $3, $4, now())\n            ON CONFLICT (id) DO UPDATE\n               SET name = EXCLUDED.name, quality = EXCLUDED.quality,\n                   item_class = EXCLUDED.item_class, updated_at = now()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "573d6a35bd5ba1a918887dfb04a076a74063e089b3eba62f636e8c102c22ac10"
+}

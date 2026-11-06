@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO price_point\n            (ts, scan_id, auction_house_id, item_id,\n             min_price, p10_price, p50_price, p90_price, quantity, auctions)\n        SELECT $1, $2, *\n          FROM UNNEST($3::smallint[], $4::integer[], $5::bigint[], $6::bigint[],\n                      $7::bigint[], $8::bigint[], $9::integer[], $10::integer[])\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int4",
+        "Int2Array",
+        "Int4Array",
+        "Int8Array",
+        "Int8Array",
+        "Int8Array",
+        "Int8Array",
+        "Int4Array",
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6e57b5a8c3b262ae65048f7028a778ce87a86b3cff3a60483497f531a6820e5d"
+}

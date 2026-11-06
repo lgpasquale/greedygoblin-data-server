@@ -1,0 +1,57 @@
+name: wow-data
+
+services:
+  db:
+    # Non "-oss" image: compression (columnstore) is only in the full image.
+    image: timescale/timescaledb:2.31.0-pg18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wow}
+      POSTGRES_USER: ${POSTGRES_USER:-wow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      # Explicit data directory under the mounted volume, so the path does not
+      # depend on the image default (it changed with PostgreSQL 18).
+      PGDATA: /var/lib/postgresql/data
+      # Memory settings are passed explicitly below; skip the image's auto-tuning.
+      NO_TS_TUNE: "true"
+      TIMESCALEDB_TELEMETRY: "off"
+    # Tuned for ~1 GB of RAM for the database.
+    command:
+      - postgres
+      - -c
+      - effective_cache_size=512MB
+      - -c
+      - timescaledb.telemetry_level=off
+    volumes:
+      - ./volumes/timescaledb:/var/lib/postgresql
+    # Reachable only from this machine (for local tools and development).
+    # Services added to this file connect through the compose network as "db".
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    shm_size: 256mb
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  collector:
+    # Built by the deploy workflow and loaded on the VM with `docker load`; it
+    # is never pulled. Locally: docker build -t wow-data-server .
+    image: wow-data-server:${IMAGE_TAG:-latest}
+    pull_policy: never
+    command: [collector]
+    restart: unless-stopped
+    environment:
+      # POSTGRES_PASSWORD is put in a URL: avoid characters like @ / : ? # %.
+      DATABASE_URL: postgres://${POSTGRES_USER:-wow}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wow}
+      BLIZZARD_CLIENT_ID: ${BLIZZARD_CLIENT_ID:?set BLIZZARD_CLIENT_ID in .env}
+      BLIZZARD_CLIENT_SECRET: ${BLIZZARD_CLIENT_SECRET:?set BLIZZARD_CLIENT_SECRET in .env}
+      REGIONS: ${REGIONS:-}
+      RUST_LOG: ${RUST_LOG:-info}
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 256m
