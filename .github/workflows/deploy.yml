@@ -59,12 +59,10 @@ jobs:
         run: |
           docker save "$IMAGE:$TAG" "$IMAGE:latest" \
             | zstd -T0 -3 \
-            | ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" 'zstd -d | docker load'
+            | ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" 'zstd -d | docker load'
 
-      - name: Copy compose file to the VM
-        run: |
-          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_DIR'"
-          scp -P "$DEPLOY_PORT" docker-compose.yml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/docker-compose.yml"
+      - run: ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" "mkdir -p ${DEPLOY_DIR}"
+      - run: scp -P "${DEPLOY_PORT}" docker-compose.yml "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_DIR}/docker-compose.yml"
 
       - name: Start services
         run: |
@@ -81,6 +79,6 @@ jobs:
       - name: Remove old images
         # Keep the deployed image and "latest"; disk on the VM is limited.
         run: |
-          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "docker images '$IMAGE' --format '{{.Tag}}' \
+          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" "docker images '${IMAGE}' --format '{{.Tag}}' \
             | grep -vxE 'latest|$TAG' \
-            | xargs -r -I{} docker rmi '$IMAGE:{}'; docker image prune -f"
+            | xargs -r -I{} docker rmi '${IMAGE}:{}'; docker image prune -f"
