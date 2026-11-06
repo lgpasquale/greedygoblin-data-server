@@ -1,0 +1,101 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT item_id, min_price, p10_price, p50_price, p90_price, quantity, auctions\n          FROM price_point\n         WHERE auction_house_id = $1 AND ts = $2\n         ORDER BY item_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "item_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "price_point",
+            "name": "item_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "min_price",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "price_point",
+            "name": "min_price"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "p10_price",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "price_point",
+            "name": "p10_price"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "p50_price",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "price_point",
+            "name": "p50_price"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "p90_price",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "price_point",
+            "name": "p90_price"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "quantity",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "price_point",
+            "name": "quantity"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "auctions",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "price_point",
+            "name": "auctions"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int2",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8269b294dad232f0e946bc31199787f1a22140f96c2add8bf3315849e75562aa"
+}

@@ -42,7 +42,8 @@ for the database. Keep CPU and RAM use of our own services low.
     `collector scan <region>` runs one scan now and exits (for testing).
     Modules: `blizzard` (API client), `stats` (per-item statistics), `scan`
     (one region scan and its storage), `schedule` (scan slots).
-  - `crates/api` (not created yet): an `axum` + `tokio` HTTP server.
+  - `crates/api`: an `axum` + `tokio` HTTP server. Modules: `main`
+    (configuration, CORS, gzip), `routes` (handlers and responses).
 - **HTTP client**: `reqwest` with `rustls`, gzip and JSON. Parse the auction
   payloads with `serde`. Deserialize only the fields we use.
 - **Database: PostgreSQL 18 + TimescaleDB 2.31** (image
@@ -59,9 +60,9 @@ for the database. Keep CPU and RAM use of our own services low.
   failing must not affect the others. On start, it does not catch up on missed
   scans; it waits for the next slot.
 - **Docker**: one image, `greedygoblin-data-server`, built by `Dockerfile` from this
-  workspace with every binary (`collector`, later `api`) on `debian:trixie-slim`.
+  workspace with every binary (`collector`, `api`) on `debian:trixie-slim`.
   The build uses `SQLX_OFFLINE=true`. `docker-compose.yml` runs `db` and
-  `collector` (`api` once it exists); the services use
+  `collector` and `api`; the services use
   `greedygoblin-data-server:${IMAGE_TAG:-latest}`. Their `DATABASE_URL` is built from
   `POSTGRES_*`, so the password must not contain URL special characters.
 - **Deployment**: GitHub Actions on push to `master`. The runner builds the image,
@@ -275,15 +276,43 @@ without asking first.
 
 ## API server
 
-- Read-only. JSON responses. CORS can be configured.
-- Planned endpoints (version prefix `/v1`):
-  - `GET /v1/auction-houses`
+- Read-only. JSON responses, gzip when the client accepts it. No authentication:
+  rate limits and any keys are left to the reverse proxy. The API connects with
+  `default_transaction_read_only` and does not run migrations
+  (`greedygoblin_core::connect_read_only`).
+- Configuration: `DATABASE_URL`, `API_BIND` (default `0.0.0.0:7008`),
+  `CORS_ALLOW_ORIGINS` (comma-separated origins or `*`; unset: no CORS). In
+  compose it is published on port 7008 on all interfaces (the VM does
+  not expose that port; the reverse proxy reaches it).
+- Main user: a **companion program** of the GreedyGoblin add-on (`../GreedyGoblin`),
+  configured with one region, ruleset and faction. It downloads every scan of
+  that auction house, past ones included, and gives them to the add-on, which
+  stores per local day the highest and lowest minimum price and the last
+  quantity. So the API serves **per-scan data**; grouping by day is done by the
+  companion (the add-on's day is in local time). Add-on Auction House names map
+  to ours as `PvP` = `pvp`, `PvE` = `normal`, `RP` = `rp`, `RP-PvP` = `rp-pvp`,
+  `HC` = the group without ruleset; faction `Neutral` = `blackwater`.
+- Endpoints (prefix `/v1`):
+  - `GET /v1/auction-houses`: all auction houses (`id`, `region`, `ruleset` slug
+    or null, `faction`, `blizzard_id`). `Cache-Control: max-age=86400`.
+  - `GET /v1/auction-houses/{id}/scans?from=&after=&limit=`: the scans of one
+    auction house, oldest first: `id`, `ts` (scan start), `status`,
+    `last_modified`. `from` = started at or after (RFC 3339), `after` = scan id
+    greater than (to continue), `limit` 1–1000 (default 1000). `ETag` = latest
+    scan id of that auction house, `max-age=300`, `If-None-Match` gives 304.
+  - `GET /v1/auction-houses/{id}/scans/{scanId}`: every item of that auction house
+    in that scan: `item_id`, `min_price`, `p10_price`, `p50_price`, `p90_price`,
+    `quantity`, `auctions`, plus the scan's `ts` and `last_modified`. A scan
+    with status `unchanged` returns the data of the last `ok` scan before it, so
+    clients need not know about `unchanged`; status `error` gives 404. Immutable
+    (`max-age=31536000, immutable`). One request per scan.
+- Errors are `{"error": "..."}` with status 400, 404 or 500.
+- Planned for a web interface, not built yet:
   - `GET /v1/items/{itemId}`: metadata
   - `GET /v1/auction-houses/{id}/items/{itemId}/history?from=&to=`: time series
   - `GET /v1/auction-houses/{id}/latest`: latest snapshot for all items
+  - aggregate metrics, to be defined.
 - Always limit the time range and the number of rows returned.
-- Set HTTP caching headers (`Cache-Control`, `ETag` from the latest scan id). The data
-  changes only every 4 hours.
 
 ## Commands
 
@@ -299,6 +328,7 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 cargo run -p collector -- scan eu    # one scan of one region, then exit
 cargo run -p collector               # run the schedule
+cargo run -p api                     # run the API on API_BIND
 cargo sqlx prepare --workspace       # refresh .sqlx/ after changing a query
 docker build -t greedygoblin-data-server .    # build the image locally
 docker compose run --rm collector collector scan eu   # one scan in the container

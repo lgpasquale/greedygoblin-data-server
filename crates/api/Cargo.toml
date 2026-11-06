@@ -1,0 +1,21 @@
+[package]
+name = "api"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow = "1.0.104"
+axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio", "tracing"] }
+chrono = { version = "0.4.45", default-features = false, features = ["std", "clock", "serde"] }
+serde = { version = "1.0.229", features = ["derive"] }
+sqlx = { version = "0.9.0", default-features = false, features = ["postgres", "runtime-tokio", "tls-rustls", "macros", "chrono"] }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "signal"] }
+tower-http = { version = "0.7.1", features = ["compression-gzip", "cors"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
+greedygoblin-core = { version = "0.1.0", path = "../core" }
+
+[lints]
+workspace = true

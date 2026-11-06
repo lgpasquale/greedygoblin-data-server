@@ -4,7 +4,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use sqlx::PgPool;
-use sqlx::postgres::PgPoolOptions;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 /// Database migrations in `crates/core/migrations`.
 pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
@@ -17,6 +17,19 @@ pub async fn connect(database_url: &str, max_connections: u32) -> Result<PgPool,
         .await?;
     MIGRATOR.run(&pool).await?;
     Ok(pool)
+}
+
+/// Opens a connection pool whose transactions are read-only, without applying
+/// migrations: for the API, as the collector is the only writer.
+pub async fn connect_read_only(
+    database_url: &str,
+    max_connections: u32,
+) -> Result<PgPool, sqlx::Error> {
+    let options: PgConnectOptions = database_url.parse()?;
+    PgPoolOptions::new()
+        .max_connections(max_connections)
+        .connect_with(options.options([("default_transaction_read_only", "on")]))
+        .await
 }
 
 /// A Battle.net API region.

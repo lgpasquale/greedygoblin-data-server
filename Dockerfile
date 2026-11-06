@@ -1,4 +1,4 @@
-# One image with every binary of the workspace (collector, later api).
+# One image with every binary of the workspace (collector, api).
 # Queries are checked against the committed .sqlx/ directory, so no database
 # is needed at build time.
 
@@ -8,7 +8,7 @@ ENV SQLX_OFFLINE=true
 COPY . .
 RUN cargo build --release --locked --workspace \
  && mkdir /out \
- && cp target/release/collector /out/
+ && cp target/release/collector target/release/api /out/
 
 FROM debian:trixie-slim
 # CA certificates for HTTPS to the Blizzard API.

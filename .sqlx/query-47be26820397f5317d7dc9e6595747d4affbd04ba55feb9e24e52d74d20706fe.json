@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT (SELECT max(scan_id) FROM scan_auction_house WHERE auction_house_id = ah.id)\n          FROM auction_house ah\n         WHERE ah.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "max",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int2"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "47be26820397f5317d7dc9e6595747d4affbd04ba55feb9e24e52d74d20706fe"
+}

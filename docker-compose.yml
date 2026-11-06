@@ -55,3 +55,22 @@ services:
       db:
         condition: service_healthy
     mem_limit: 256m
+
+  api:
+    image: greedygoblin-data-server:${IMAGE_TAG:-latest}
+    pull_policy: never
+    command: [api]
+    restart: unless-stopped
+    environment:
+      # Read-only connection (default_transaction_read_only); no migrations.
+      DATABASE_URL: postgres://${POSTGRES_USER:-wow}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wow}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-}
+      RUST_LOG: ${RUST_LOG:-info}
+    # Reached by the reverse proxy, which adds TLS and rate limits. Bound to all
+    # interfaces: the port is not open to the internet on the VM.
+    ports:
+      - "7008:7008"
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 128m
