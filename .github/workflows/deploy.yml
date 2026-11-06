@@ -46,7 +46,7 @@ jobs:
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
       # Configure SSH
-      - run: |
+        run: |
           export HOME=/root
           command -v ssh-agent >/dev/null || ( apt-get update -y && apt-get install openssh-client -y )
           mkdir -p ~/.ssh
