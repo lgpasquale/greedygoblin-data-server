@@ -36,8 +36,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    networks:
-      - reverseproxy
 
   collector:
     # Built by the deploy workflow and loaded on the VM with `docker load`; it
@@ -57,8 +55,6 @@ services:
       db:
         condition: service_healthy
     mem_limit: 256m
-    networks:
-      - reverseproxy
 
   api:
     image: greedygoblin-data-server:${IMAGE_TAG:-latest}
@@ -78,8 +74,14 @@ services:
       db:
         condition: service_healthy
     mem_limit: 128m
+    # "default" is this project's own network, shared with db and collector.
+    # Only the API joins the reverse proxy's network.
     networks:
-      - reverseproxy
+      default:
+      reverseproxy:
+        aliases:
+          - greedygoblin-data-server-api
+
 networks:
   reverseproxy:
     external: true
