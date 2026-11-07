@@ -23,7 +23,7 @@ services:
       - -c
       - timescaledb.telemetry_level=off
     volumes:
-      - ${DEPLOY_VOLUMES_DIR:-./volumes}/greedygoblin-data-server/timescaledb:/var/lib/postgresql
+      - ${DEPLOY_VOLUMES_DIR:-./volumes}/timescaledb:/var/lib/postgresql
     # Reachable only from this machine (for local tools and development).
     # Services added to this file connect through the compose network as "db".
     ports:

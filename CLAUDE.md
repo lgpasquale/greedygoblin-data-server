@@ -43,7 +43,8 @@ for the database. Keep CPU and RAM use of our own services low.
     Modules: `blizzard` (API client), `stats` (per-item statistics), `scan`
     (one region scan and its storage), `schedule` (scan slots).
   - `crates/api`: an `axum` + `tokio` HTTP server. Modules: `main`
-    (configuration, CORS, gzip), `routes` (handlers and responses).
+    (configuration, CORS, gzip), `routes` (handlers and responses). The web
+    page `crates/api/web/index.html` is embedded with `include_str!`.
 - **HTTP client**: `reqwest` with `rustls`, gzip and JSON. Parse the auction
   payloads with `serde`. Deserialize only the fields we use.
 - **Database: PostgreSQL 18 + TimescaleDB 2.31** (image
@@ -306,10 +307,19 @@ without asking first.
     with status `unchanged` returns the data of the last `ok` scan before it, so
     clients need not know about `unchanged`; status `error` gives 404. Immutable
     (`max-age=31536000, immutable`). One request per scan.
+  - `GET /v1/auction-houses/{id}/items/{itemId}/history?from=&to=`: one item's
+    `price_point` rows (with `ts`, `scan_id`), oldest first. Default range: the
+    last 30 days; at most 366 days. `max-age=300`.
+  - `GET /v1/items?q=&limit=`: items whose name contains `q` (`ILIKE`, wildcards
+    escaped) or whose id is `q`: `id`, `name`, `quality`. `limit` 1–50
+    (default 20). `max-age=3600`.
+- Web page at `/`: one static `index.html` embedded in the binary (no build
+  step, uPlot from jsDelivr). Choose an auction house, search an item, see its
+  price (min, median, p10–p90 band, log scale by default) and quantity over
+  time. It uses only the endpoints above, from the same origin, so no CORS.
+  `Cache-Control: no-cache`.
 - Errors are `{"error": "..."}` with status 400, 404 or 500.
-- Planned for a web interface, not built yet:
-  - `GET /v1/items/{itemId}`: metadata
-  - `GET /v1/auction-houses/{id}/items/{itemId}/history?from=&to=`: time series
+- Planned for the web interface, not built yet:
   - `GET /v1/auction-houses/{id}/latest`: latest snapshot for all items
   - aggregate metrics, to be defined.
 - Always limit the time range and the number of rows returned.

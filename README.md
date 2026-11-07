@@ -12,7 +12,8 @@ It has two services, both written in Rust:
 
 - **collector**: scans at 00:30, 04:30, …, 20:30 UTC and stores the results in
   PostgreSQL + TimescaleDB.
-- **api**: an HTTP server on port 7008, documented below.
+- **api**: an HTTP server on port 7008, documented below. At `/` it also
+  serves a web page to search an item and chart its price history.
 
 ## Data
 
@@ -106,6 +107,53 @@ For an `unchanged` scan, the response contains the data of the last `ok` scan
 before it, so a client can treat both statuses the same way. For an `error`
 scan, the response is 404.
 
+### `GET /v1/auction-houses/{id}/items/{itemId}/history`
+
+Returns the statistics of one item in one auction house over time, oldest
+first.
+
+| Parameter | Meaning                                                       |
+|-----------|---------------------------------------------------------------|
+| `from`    | start of the time range (default: `to` minus 30 days)         |
+| `to`      | end of the time range (default: now)                          |
+
+The range may be at most 366 days.
+
+```json
+{
+  "auction_house_id": 1,
+  "item_id": 2589,
+  "from": "2026-10-08T12:00:00Z",
+  "to": "2026-11-07T12:00:00Z",
+  "points": [
+    {"ts": "2026-11-06T08:17:33Z", "scan_id": 2, "min_price": 26, "p10_price": 28,
+     "p50_price": 32, "p90_price": 52, "quantity": 8822, "auctions": 345}
+  ]
+}
+```
+
+There is a point only for scans that stored data for the item: none when the
+item was not listed, and none for `unchanged` or `error` scans.
+
+### `GET /v1/items?q=&limit=`
+
+Searches items by name (case-insensitive, any part of the name) or by id.
+
+| Parameter | Meaning                                                       |
+|-----------|---------------------------------------------------------------|
+| `q`       | text to search, 1–100 characters; a number also matches that item id |
+| `limit`   | at most this many items, 1–50 (default 20)                    |
+
+```json
+[
+  {"id": 2589, "name": "Linen Cloth", "quality": "COMMON"}
+]
+```
+
+The id match comes first, then names that start with `q`, then shorter names.
+`name` and `quality` are `null` for items that Blizzard has no metadata for
+(about a third of them); those can only be found by id.
+
 ### Caching
 
 | Endpoint                | `Cache-Control`                     | Notes |
@@ -113,6 +161,8 @@ scan, the response is 404.
 | `/auction-houses`       | `public, max-age=86400`             | |
 | `…/scans`               | `public, max-age=300`               | `ETag` changes when a new scan is stored; send it back in `If-None-Match` to get `304 Not Modified` |
 | `…/scans/{scanId}`      | `public, max-age=31536000, immutable` | the data of a scan never changes |
+| `…/items/{itemId}/history` | `public, max-age=300`            | |
+| `/items`                | `public, max-age=3600`              | |
 
 ### Example: a companion that stays up to date
 

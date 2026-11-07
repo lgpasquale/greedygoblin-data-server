@@ -3,10 +3,10 @@
 use axum::extract::{Path, Query, State};
 use axum::http::header::{CACHE_CONTROL, ETAG, IF_NONE_MATCH};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
-use axum::response::{IntoResponse, Response};
+use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
@@ -16,16 +16,41 @@ const CACHE_AUCTION_HOUSES: &str = "public, max-age=86400";
 const CACHE_SCANS: &str = "public, max-age=300";
 /// The data of a scan never changes.
 const CACHE_SNAPSHOT: &str = "public, max-age=31536000, immutable";
+/// Item names are fetched once, when an item is first seen.
+const CACHE_ITEMS: &str = "public, max-age=3600";
+/// A new scan arrives every 4 hours.
+const CACHE_HISTORY: &str = "public, max-age=300";
+/// The page is embedded in the binary: revalidate after each deploy.
+const CACHE_PAGE: &str = "no-cache";
 
 /// Scans returned by one request when `limit` is not given, and at most.
 const DEFAULT_SCAN_LIMIT: i64 = 1000;
 const MAX_SCAN_LIMIT: i64 = 1000;
 
+/// Items returned by a search when `limit` is not given, and at most.
+const DEFAULT_ITEM_LIMIT: i64 = 20;
+const MAX_ITEM_LIMIT: i64 = 50;
+/// Longest accepted search text, in characters.
+const MAX_QUERY_CHARS: usize = 100;
+
+/// Item history: time range when `from` is not given, and at most.
+const DEFAULT_HISTORY_DAYS: i64 = 30;
+const MAX_HISTORY_DAYS: i64 = 366;
+
+/// The web page: item search and price history chart.
+const INDEX_HTML: &str = include_str!("../web/index.html");
+
 pub fn router(pool: PgPool) -> Router {
     Router::new()
+        .route("/", get(index))
         .route("/v1/auction-houses", get(auction_houses))
         .route("/v1/auction-houses/{id}/scans", get(scans))
         .route("/v1/auction-houses/{id}/scans/{scan_id}", get(snapshot))
+        .route(
+            "/v1/auction-houses/{id}/items/{item_id}/history",
+            get(item_history),
+        )
+        .route("/v1/items", get(items))
         .fallback(|| async { ApiError::NotFound("no such endpoint") })
         .with_state(pool)
 }
@@ -222,6 +247,176 @@ async fn snapshot(
     Ok(([(CACHE_CONTROL, CACHE_SNAPSHOT)], Json(snapshot)).into_response())
 }
 
+#[derive(Deserialize)]
+struct HistoryQuery {
+    /// Start of the time range (inclusive). Default: `to` minus 30 days.
+    from: Option<DateTime<Utc>>,
+    /// End of the time range (inclusive). Default: now.
+    to: Option<DateTime<Utc>>,
+}
+
+#[derive(Serialize)]
+struct History {
+    auction_house_id: i16,
+    item_id: i32,
+    from: DateTime<Utc>,
+    to: DateTime<Utc>,
+    points: Vec<HistoryPoint>,
+}
+
+/// Statistics of one item in one scan. Prices are unit prices in copper.
+#[derive(Serialize)]
+struct HistoryPoint {
+    /// When the scan started.
+    ts: DateTime<Utc>,
+    scan_id: i32,
+    min_price: i64,
+    p10_price: i64,
+    p50_price: i64,
+    p90_price: i64,
+    quantity: i32,
+    auctions: i32,
+}
+
+/// One item's statistics in one auction house, oldest first. Only scans that
+/// stored a row for the item are returned: none for `unchanged` and `error`
+/// scans, and none when the item was not listed.
+async fn item_history(
+    State(pool): State<PgPool>,
+    Path((auction_house_id, item_id)): Path<(i16, i32)>,
+    Query(query): Query<HistoryQuery>,
+) -> Result<Response, ApiError> {
+    let (from, to) = history_range(query.from, query.to, Utc::now())?;
+
+    let exists = sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM auction_house WHERE id = $1) AS "exists!""#,
+        auction_house_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    if !exists {
+        return Err(ApiError::NotFound("no such auction house"));
+    }
+
+    let points = sqlx::query_as!(
+        HistoryPoint,
+        r#"
+        SELECT ts, scan_id, min_price, p10_price, p50_price, p90_price, quantity, auctions
+          FROM price_point
+         WHERE auction_house_id = $1 AND item_id = $2 AND ts BETWEEN $3 AND $4
+         ORDER BY ts
+        "#,
+        auction_house_id,
+        item_id,
+        from,
+        to
+    )
+    .fetch_all(&pool)
+    .await?;
+
+    let history = History {
+        auction_house_id,
+        item_id,
+        from,
+        to,
+        points,
+    };
+    Ok(([(CACHE_CONTROL, CACHE_HISTORY)], Json(history)).into_response())
+}
+
+/// The time range of a history request, checked and with its defaults.
+fn history_range(
+    from: Option<DateTime<Utc>>,
+    to: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> Result<(DateTime<Utc>, DateTime<Utc>), ApiError> {
+    let to = to.unwrap_or(now);
+    let from = from.unwrap_or(to - TimeDelta::days(DEFAULT_HISTORY_DAYS));
+    if from > to {
+        return Err(ApiError::BadRequest("from must not be after to".to_owned()));
+    }
+    if to - from > TimeDelta::days(MAX_HISTORY_DAYS) {
+        return Err(ApiError::BadRequest(format!(
+            "the time range must not exceed {MAX_HISTORY_DAYS} days"
+        )));
+    }
+    Ok((from, to))
+}
+
+#[derive(Deserialize)]
+struct ItemsQuery {
+    /// Text in the item name (case-insensitive), or an item id.
+    q: String,
+    limit: Option<i64>,
+}
+
+#[derive(Serialize)]
+struct Item {
+    id: i32,
+    /// en_US name; null when Blizzard has no metadata for the item.
+    name: Option<String>,
+    /// `POOR`, `COMMON`, `UNCOMMON`, `RARE`, ...; null when unknown.
+    quality: Option<String>,
+}
+
+/// Items whose name contains `q`, plus the item whose id is `q`. The id match
+/// comes first, then names starting with `q`, then shorter names.
+async fn items(
+    State(pool): State<PgPool>,
+    Query(query): Query<ItemsQuery>,
+) -> Result<Response, ApiError> {
+    let text = query.q.trim();
+    if text.is_empty() || text.chars().count() > MAX_QUERY_CHARS {
+        return Err(ApiError::BadRequest(format!(
+            "q must have 1 to {MAX_QUERY_CHARS} characters"
+        )));
+    }
+    let limit = query.limit.unwrap_or(DEFAULT_ITEM_LIMIT);
+    if !(1..=MAX_ITEM_LIMIT).contains(&limit) {
+        return Err(ApiError::BadRequest(format!(
+            "limit must be between 1 and {MAX_ITEM_LIMIT}"
+        )));
+    }
+
+    let id = text.parse::<i32>().ok();
+    let escaped = escape_like(text);
+    let items = sqlx::query_as!(
+        Item,
+        r#"
+        SELECT id, name, quality
+          FROM item
+         WHERE id = $1 OR name ILIKE '%' || $2 || '%'
+         ORDER BY id = $1 IS TRUE DESC,
+                  name ILIKE $2 || '%' DESC,
+                  length(name), name, id
+         LIMIT $3
+        "#,
+        id,
+        escaped,
+        limit
+    )
+    .fetch_all(&pool)
+    .await?;
+    Ok(([(CACHE_CONTROL, CACHE_ITEMS)], Json(items)).into_response())
+}
+
+/// Escapes the `LIKE` wildcards `%` and `_` (and the escape character `\`) so
+/// that `text` matches literally.
+fn escape_like(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for c in text.chars() {
+        if matches!(c, '%' | '_' | '\\') {
+            escaped.push('\\');
+        }
+        escaped.push(c);
+    }
+    escaped
+}
+
+async fn index() -> Response {
+    ([(CACHE_CONTROL, CACHE_PAGE)], Html(INDEX_HTML)).into_response()
+}
+
 /// Whether the request's `If-None-Match` lists `etag` (or is `*`).
 fn if_none_match(headers: &HeaderMap, etag: &str) -> bool {
     headers
@@ -298,5 +493,25 @@ mod tests {
         assert!(if_none_match(&headers("*"), "\"42\""));
         assert!(!if_none_match(&headers("\"41\""), "\"42\""));
         assert!(!if_none_match(&HeaderMap::new(), "\"42\""));
+    }
+
+    #[test]
+    fn escape_like_escapes_wildcards() {
+        assert_eq!(escape_like("Linen Cloth"), "Linen Cloth");
+        assert_eq!(escape_like("100%_a\\b"), "100\\%\\_a\\\\b");
+    }
+
+    #[test]
+    fn history_range_defaults_and_limits() {
+        let now: DateTime<Utc> = "2026-11-07T12:00:00Z".parse().unwrap();
+        let (from, to) = history_range(None, None, now).unwrap();
+        assert_eq!(to, now);
+        assert_eq!(to - from, TimeDelta::days(DEFAULT_HISTORY_DAYS));
+
+        let early = now - TimeDelta::days(MAX_HISTORY_DAYS);
+        assert!(history_range(Some(early), None, now).is_ok());
+        let too_early = early - TimeDelta::seconds(1);
+        assert!(history_range(Some(too_early), None, now).is_err());
+        assert!(history_range(Some(now), Some(now - TimeDelta::seconds(1)), now).is_err());
     }
 }

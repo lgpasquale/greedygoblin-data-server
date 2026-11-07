@@ -27,11 +27,11 @@ concurrency:
 env:
   IMAGE: greedygoblin-data-server
   TAG: ${{ github.sha }}
-  DEPLOY_USER: luca
-  DEPLOY_HOST: pestering-curiosity.com
+  DEPLOY_USER: root
+  DEPLOY_HOST: wow.pestering-curiosity.com
   DEPLOY_PORT: 2008
-  DEPLOY_DIR: /home/luca/ci/greedygoblin-data-server
-  DEPLOY_VOLUMES_DIR: /docker
+  DEPLOY_DIR: /mnt/HC_Volume_107396118/deploys/greedygoblin-data-server
+  DEPLOY_VOLUMES_DIR: /mnt/HC_Volume_107396118/volumes/greedygoblin-data-server
 
 jobs:
   deploy:
