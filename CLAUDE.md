@@ -315,9 +315,12 @@ without asking first.
     (default 20). `max-age=3600`.
 - Web page at `/`: one static `index.html` embedded in the binary (no build
   step, uPlot from jsDelivr). Choose an auction house, search an item, see its
-  price (min, median, p10–p90 band, log scale by default) and quantity over
-  time. It uses only the endpoints above, from the same origin, so no CORS.
-  `Cache-Control: no-cache`.
+  price (min, median, p10–p90 band hidden by default, log scale by default)
+  and quantity over time. It uses only the endpoints above, from the same
+  origin, so no CORS. Dark theme only. The item name links to
+  `wowhead.com/forever/item=<id>`; Wowhead's `tooltips.js` adds the icon,
+  quality color and tooltip. The logo (title bar and favicon) is inlined as
+  base64 WebP, made from `../GreedyGoblin*.png`. `Cache-Control: no-cache`.
 - Errors are `{"error": "..."}` with status 400, 404 or 500.
 - Planned for the web interface, not built yet:
   - `GET /v1/auction-houses/{id}/latest`: latest snapshot for all items
