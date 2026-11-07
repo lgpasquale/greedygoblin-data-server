@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GreedyGoblin Prices</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.min.css">
+<script src="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.iife.min.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --surface: #fcfcfb;
+  --surface-2: #f1f0ec;
+  --border: #dcdbd5;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --muted: #8a8984;
+  --grid: #e9e8e3;
+  --accent: #2a78d6;
+  --s-p50: #2a78d6;
+  --s-min: #eb6834;
+  --s-band: rgba(42, 120, 214, 0.14);
+  --s-band-edge: rgba(42, 120, 214, 0.45);
+  --s-qty: #6250d6;
+  --q-poor: #8a8984;
+  --q-common: #0b0b0b;
+  --q-uncommon: #138a00;
+  --q-rare: #0062c4;
+  --q-epic: #8a2bd1;
+  --q-legendary: #c25f00;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface: #1a1a19;
+    --surface-2: #252523;
+    --border: #3a3a37;
+    --text: #f0efec;
+    --text-2: #c3c2b7;
+    --muted: #8e8d86;
+    --grid: #2c2c2a;
+    --accent: #3987e5;
+    --s-p50: #3987e5;
+    --s-min: #d95926;
+    --s-band: rgba(57, 135, 229, 0.18);
+    --s-band-edge: rgba(57, 135, 229, 0.5);
+    --s-qty: #9085e9;
+    --q-poor: #9d9d9d;
+    --q-common: #f0efec;
+    --q-uncommon: #1eff00;
+    --q-rare: #3d9bff;
+    --q-epic: #b867f5;
+    --q-legendary: #ff8000;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 40px; }
+h1 { font-size: 20px; margin: 0 0 16px; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 20px; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-2); }
+select, input {
+  font: inherit; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; min-height: 36px;
+}
+select:focus, input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.search { position: relative; flex: 1 1 260px; }
+.search input { width: 100%; }
+#results {
+  position: absolute; z-index: 10; top: 100%; left: 0; right: 0; margin: 4px 0 0; padding: 4px 0;
+  list-style: none; background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15); max-height: 320px; overflow-y: auto;
+}
+#results[hidden] { display: none; }
+#results li { padding: 6px 10px; cursor: pointer; display: flex; justify-content: space-between; gap: 12px; }
+#results li[aria-selected="true"], #results li:hover { background: var(--surface-2); }
+#results .id { color: var(--muted); font-variant-numeric: tabular-nums; }
+.ranges { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.ranges button {
+  font: inherit; font-size: 13px; color: var(--text-2); background: var(--surface);
+  border: 0; padding: 0 12px; min-height: 34px; cursor: pointer;
+}
+.ranges button + button { border-left: 1px solid var(--border); }
+.ranges button[aria-pressed="true"] { background: var(--surface-2); color: var(--text); font-weight: 600; }
+label.check { flex-direction: row; align-items: center; gap: 6px; min-height: 36px; }
+label.check input { min-height: 0; margin: 0; }
+.item-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 0 0 4px; font-size: 18px; }
+.item-title .id { font-size: 14px; color: var(--muted); font-weight: normal; }
+.status { color: var(--text-2); margin: 0 0 12px; min-height: 1.45em; }
+.chart-title { font-size: 14px; font-weight: 600; color: var(--text-2); margin: 16px 0 4px; }
+.chart { width: 100%; }
+.q-POOR { color: var(--q-poor); } .q-COMMON { color: var(--q-common); }
+.q-UNCOMMON { color: var(--q-uncommon); } .q-RARE { color: var(--q-rare); }
+.q-EPIC { color: var(--q-epic); } .q-LEGENDARY { color: var(--q-legendary); }
+.uplot, .uplot * { font-family: inherit; }
+.u-legend { font-size: 13px; color: var(--text-2); text-align: left; }
+.u-legend .u-value { color: var(--text); font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<main>
+  <h1>GreedyGoblin price history</h1>
+
+  <div class="controls">
+    <label>Region <select id="region"></select></label>
+    <label>Ruleset <select id="ruleset"></select></label>
+    <label>Faction <select id="faction"></select></label>
+    <div class="search">
+      <label for="q">Item (name or id)</label>
+      <input id="q" type="search" autocomplete="off" placeholder="e.g. Linen Cloth or 2589"
+             role="combobox" aria-expanded="false" aria-controls="results">
+      <ul id="results" role="listbox" hidden></ul>
+    </div>
+    <div class="ranges" role="group" aria-label="Time range" id="ranges">
+      <button data-days="7">7d</button>
+      <button data-days="30">30d</button>
+      <button data-days="90">90d</button>
+      <button data-days="366">1y</button>
+    </div>
+    <label class="check"><input type="checkbox" id="log" checked> Log scale</label>
+  </div>
+
+  <h2 class="item-title" id="item-title"></h2>
+  <p class="status" id="status">Choose an auction house and search for an item.</p>
+
+  <div id="charts" hidden>
+    <div class="chart-title">Unit price (min, median, 10th–90th percentile)</div>
+    <div class="chart" id="price-chart"></div>
+    <div class="chart-title">Quantity listed</div>
+    <div class="chart" id="qty-chart"></div>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+const RULESET_LABELS = { pvp: "PvP", normal: "Normal", rp: "Roleplay", "rp-pvp": "Roleplay PvP", "": "Unknown (empty)" };
+const FACTION_LABELS = { alliance: "Alliance", horde: "Horde", blackwater: "Blackwater (neutral)" };
+// Scans run every 4 hours: a longer pause between two points means the item
+// was not listed (or a scan failed), so the line is broken there.
+const GAP_SECONDS = 6 * 3600;
+
+const $ = (id) => document.getElementById(id);
+const state = { houses: [], ah: null, item: null, days: 30 };
+let charts = [];
+let lastHistory = null;
+
+// ---- formatting ----------------------------------------------------------
+
+function money(copper) {
+  if (copper == null) return "–";
+  const g = Math.floor(copper / 10000), s = Math.floor(copper / 100) % 100, c = copper % 100;
+  const parts = [];
+  if (g) parts.push(g.toLocaleString("en-US") + "g");
+  if (s || (g && c)) parts.push(s + "s");
+  if (c || !parts.length) parts.push(c + "c");
+  return parts.join(" ");
+}
+
+// Short form for axis ticks.
+function moneyTick(copper) {
+  if (copper >= 10000) {
+    const g = copper / 10000;
+    return (g >= 100 ? Math.round(g).toLocaleString("en-US") : +g.toFixed(2)) + "g";
+  }
+  if (copper >= 100) return +(copper / 100).toFixed(2) + "s";
+  return Math.round(copper) + "c";
+}
+
+function css(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+async function getJson(url) {
+  const res = await fetch(url);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+  return body;
+}
+
+// ---- URL state -----------------------------------------------------------
+
+function readUrl() {
+  const p = new URLSearchParams(location.search);
+  return { ah: +p.get("ah") || null, item: +p.get("item") || null, days: +p.get("days") || null };
+}
+
+function writeUrl() {
+  const p = new URLSearchParams();
+  if (state.ah) p.set("ah", state.ah);
+  if (state.item) p.set("item", state.item.id);
+  if (state.days !== 30) p.set("days", state.days);
+  const qs = p.toString();
+  history.replaceState(null, "", qs ? "?" + qs : location.pathname);
+}
+
+// ---- auction house selection ----------------------------------------------
+
+function fillSelect(select, values, labels, keep) {
+  select.replaceChildren(...values.map((v) => new Option(labels[v] || v.toUpperCase(), v)));
+  if (values.includes(keep)) select.value = keep;
+}
+
+function updateHouseSelects(prefer) {
+  const houses = state.houses;
+  const regions = [...new Set(houses.map((h) => h.region))];
+  fillSelect($("region"), regions, {}, prefer.region ?? $("region").value);
+  const inRegion = houses.filter((h) => h.region === $("region").value);
+  const rulesets = [...new Set(inRegion.map((h) => h.ruleset ?? ""))];
+  fillSelect($("ruleset"), rulesets, RULESET_LABELS, prefer.ruleset ?? $("ruleset").value);
+  const inRuleset = inRegion.filter((h) => (h.ruleset ?? "") === $("ruleset").value);
+  const factions = inRuleset.map((h) => h.faction);
+  fillSelect($("faction"), factions, FACTION_LABELS, prefer.faction ?? $("faction").value);
+  const house = inRuleset.find((h) => h.faction === $("faction").value);
+  state.ah = house ? house.id : null;
+}
+
+function onHouseChange() {
+  updateHouseSelects({});
+  writeUrl();
+  loadHistory();
+}
+
+// ---- item search ----------------------------------------------------------
+
+let searchTimer = null, searchSeq = 0, results = [], active = -1;
+
+function itemLabel(item) {
+  return item.name ?? `Item ${item.id}`;
+}
+
+function renderResults() {
+  const list = $("results");
+  list.replaceChildren(...results.map((item, i) => {
+    const li = document.createElement("li");
+    li.setAttribute("role", "option");
+    li.setAttribute("aria-selected", i === active ? "true" : "false");
+    const name = document.createElement("span");
+    name.textContent = itemLabel(item);
+    if (item.quality) name.className = "q-" + item.quality;
+    const id = document.createElement("span");
+    id.className = "id";
+    id.textContent = item.id;
+    li.append(name, id);
+    li.addEventListener("mousedown", (e) => { e.preventDefault(); chooseItem(item); });
+    return li;
+  }));
+  const open = results.length > 0;
+  list.hidden = !open;
+  $("q").setAttribute("aria-expanded", open);
+}
+
+async function search(text) {
+  const seq = ++searchSeq;
+  if (!text) { results = []; renderResults(); return; }
+  try {
+    const found = await getJson("/v1/items?q=" + encodeURIComponent(text));
+    if (seq !== searchSeq) return;
+    results = found;
+    // An id without metadata is still a valid item to look up.
+    if (/^\d+$/.test(text) && !found.some((i) => i.id === +text)) {
+      results = [{ id: +text, name: null, quality: null }, ...found];
+    }
+    active = results.length ? 0 : -1;
+    renderResults();
+  } catch (err) {
+    if (seq === searchSeq) setStatus("Search failed: " + err.message);
+  }
+}
+
+function chooseItem(item) {
+  state.item = item;
+  $("q").value = itemLabel(item);
+  results = [];
+  renderResults();
+  writeUrl();
+  loadHistory();
+}
+
+$("q").addEventListener("input", (e) => {
+  clearTimeout(searchTimer);
+  const text = e.target.value.trim();
+  searchTimer = setTimeout(() => search(text), 200);
+});
+$("q").addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown" && results.length) { active = (active + 1) % results.length; renderResults(); e.preventDefault(); }
+  else if (e.key === "ArrowUp" && results.length) { active = (active - 1 + results.length) % results.length; renderResults(); e.preventDefault(); }
+  else if (e.key === "Enter" && active >= 0) { chooseItem(results[active]); e.preventDefault(); }
+  else if (e.key === "Escape") { results = []; renderResults(); }
+});
+$("q").addEventListener("blur", () => { results = []; renderResults(); });
+$("q").addEventListener("focus", (e) => { if (e.target.value.trim() && !state.item) search(e.target.value.trim()); });
+
+// ---- history and charts -----------------------------------------------------
+
+function setStatus(text) { $("status").textContent = text; }
+
+function renderTitle() {
+  const title = $("item-title");
+  title.replaceChildren();
+  if (!state.item) return;
+  const name = document.createElement("span");
+  name.textContent = itemLabel(state.item);
+  if (state.item.quality) name.className = "q-" + state.item.quality;
+  const id = document.createElement("span");
+  id.className = "id";
+  id.textContent = "#" + state.item.id;
+  title.append(name, id);
+}
+
+let historySeq = 0;
+
+async function loadHistory() {
+  renderTitle();
+  if (!state.ah || !state.item) return;
+  const seq = ++historySeq;
+  const from = new Date(Date.now() - state.days * 86400e3).toISOString();
+  setStatus("Loading…");
+  try {
+    const h = await getJson(`/v1/auction-houses/${state.ah}/items/${state.item.id}/history?from=${encodeURIComponent(from)}`);
+    if (seq !== historySeq) return;
+    lastHistory = h;
+    drawCharts(h);
+  } catch (err) {
+    if (seq === historySeq) { setStatus("Could not load the history: " + err.message); $("charts").hidden = true; }
+  }
+}
+
+// Columns for uPlot, with a null row inside each long pause so the line breaks.
+function columns(points) {
+  const cols = [[], [], [], [], [], []];
+  let prev = null;
+  for (const p of points) {
+    const t = Date.parse(p.ts) / 1000;
+    if (prev != null && t - prev > GAP_SECONDS) {
+      cols[0].push((prev + t) / 2);
+      for (let i = 1; i < cols.length; i++) cols[i].push(null);
+    }
+    cols[0].push(t);
+    cols[1].push(p.p90_price); cols[2].push(p.p10_price);
+    cols[3].push(p.p50_price); cols[4].push(p.min_price);
+    cols[5].push(p.quantity);
+    prev = t;
+  }
+  return cols;
+}
+
+function drawCharts(h) {
+  charts.forEach((c) => c.destroy());
+  charts = [];
+  const n = h.points.length;
+  if (!n) {
+    $("charts").hidden = true;
+    setStatus(`Not listed in this auction house in the last ${state.days} days.`);
+    return;
+  }
+  const last = h.points[n - 1];
+  setStatus(`Last scan ${new Date(last.ts).toLocaleString()}: min ${money(last.min_price)}, ` +
+    `median ${money(last.p50_price)}, ${last.quantity.toLocaleString("en-US")} units in ${last.auctions} auctions.`);
+  $("charts").hidden = false;
+
+  const cols = columns(h.points);
+  const width = $("price-chart").clientWidth;
+  const sync = uPlot.sync("history");
+  const axis = () => ({
+    stroke: css("--text-2"),
+    grid: { stroke: css("--grid"), width: 1 },
+    ticks: { stroke: css("--grid"), width: 1 },
+  });
+  const point = (color) => ({ size: 5, fill: color, stroke: color });
+  const cursor = { sync: { key: sync.key }, points: { size: 8 } };
+
+  const price = new uPlot({
+    width, height: 320,
+    cursor,
+    // p90 is often far above the minimum: a log scale keeps both readable.
+    scales: { x: { time: true }, y: { distr: $("log").checked ? 3 : 1 } },
+    axes: [axis(), { ...axis(), size: 70, values: (u, ticks) => ticks.map((t) => t == null ? "" : moneyTick(t)) }],
+    series: [
+      { value: (u, v) => v == null ? "–" : new Date(v * 1000).toLocaleString() },
+      { label: "90th pct", stroke: css("--s-band-edge"), width: 1, value: (u, v) => money(v) },
+      { label: "10th pct", stroke: css("--s-band-edge"), width: 1, value: (u, v) => money(v) },
+      { label: "Median", stroke: css("--s-p50"), width: 2, points: point(css("--s-p50")), value: (u, v) => money(v) },
+      { label: "Min", stroke: css("--s-min"), width: 2, points: point(css("--s-min")), value: (u, v) => money(v) },
+    ],
+    bands: [{ series: [1, 2], fill: css("--s-band") }],
+  }, cols.slice(0, 5), $("price-chart"));
+
+  const qty = new uPlot({
+    width, height: 160,
+    cursor,
+    scales: { x: { time: true }, y: { range: (u, min, max) => [0, Math.max(1, max) * 1.1] } },
+    axes: [axis(), { ...axis(), size: 70, values: (u, ticks) => ticks.map((t) => t.toLocaleString("en-US")) }],
+    series: [
+      { value: (u, v) => v == null ? "–" : new Date(v * 1000).toLocaleString() },
+      { label: "Quantity", stroke: css("--s-qty"), width: 2, points: point(css("--s-qty")),
+        value: (u, v) => v == null ? "–" : v.toLocaleString("en-US") },
+    ],
+  }, [cols[0], cols[5]], $("qty-chart"));
+
+  sync.sub(price);
+  sync.sub(qty);
+  charts = [price, qty];
+}
+
+new ResizeObserver(() => {
+  const width = $("price-chart").clientWidth;
+  charts.forEach((c) => c.setSize({ width, height: c.height }));
+}).observe($("price-chart"));
+
+// Redraw with the other palette when the color scheme changes.
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (lastHistory) drawCharts(lastHistory);
+});
+
+$("log").addEventListener("change", () => { if (lastHistory) drawCharts(lastHistory); });
+
+// ---- range buttons ------------------------------------------------------------
+
+function renderRanges() {
+  for (const b of $("ranges").querySelectorAll("button")) {
+    b.setAttribute("aria-pressed", +b.dataset.days === state.days ? "true" : "false");
+  }
+}
+$("ranges").addEventListener("click", (e) => {
+  const days = +e.target.dataset.days;
+  if (!days) return;
+  state.days = days;
+  renderRanges();
+  writeUrl();
+  loadHistory();
+});
+
+// ---- start ----------------------------------------------------------------------
+
+for (const id of ["region", "ruleset", "faction"]) $(id).addEventListener("change", onHouseChange);
+
+(async () => {
+  const url = readUrl();
+  if (url.days) state.days = Math.min(366, Math.max(1, url.days));
+  renderRanges();
+  try {
+    state.houses = await getJson("/v1/auction-houses");
+  } catch (err) {
+    setStatus("Could not load the auction houses: " + err.message);
+    return;
+  }
+  const start = state.houses.find((h) => h.id === url.ah) ?? state.houses[0];
+  updateHouseSelects(start ? { region: start.region, ruleset: start.ruleset ?? "", faction: start.faction } : {});
+  if (url.item) {
+    const found = await getJson("/v1/items?q=" + url.item).catch(() => []);
+    chooseItem(found.find((i) => i.id === url.item) ?? { id: url.item, name: null, quality: null });
+  }
+})();
+</script>
+</body>
+</html>

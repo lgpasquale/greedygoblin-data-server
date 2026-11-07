@@ -1,0 +1,115 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT ts, scan_id, min_price, p10_price, p50_price, p90_price, quantity, auctions\n          FROM price_point\n         WHERE auction_house_id = $1 AND item_id = $2 AND ts BETWEEN $3 AND $4\n         ORDER BY ts\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ts",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "price_point",
+            "name": "ts"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "scan_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "price_point",
+            "name": "scan_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "min_price",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "price_point",
+            "name": "min_price"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "p10_price",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "price_point",
+            "name": "p10_price"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "p50_price",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "price_point",
+            "name": "p50_price"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "p90_price",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "price_point",
+            "name": "p90_price"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "quantity",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "price_point",
+            "name": "quantity"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "auctions",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "price_point",
+            "name": "auctions"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int2",
+        "Int4",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b302476d1f632c36bcfc4138770ac6c07b50392af2d6e15407eb56279b438031"
+}
