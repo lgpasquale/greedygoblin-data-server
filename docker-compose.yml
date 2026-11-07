@@ -80,3 +80,6 @@ services:
     mem_limit: 128m
     networks:
       - reverseproxy
+networks:
+  reverseproxy:
+    external: true
